@@ -1,14 +1,16 @@
 package xyz.phanta.sor.core.core;
 
 import xyz.phanta.sor.api.exchange.SorMessageType;
+import xyz.phanta.sor.api.message.ISorMessage;
 import xyz.phanta.sor.api.message.ISorMessageListener;
 import xyz.phanta.sor.api.target.ISorMessageBus;
+import xyz.phanta.sor.core.data.SorMessage;
 
 import java.util.Collection;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 
-public class SorTopic<MSG> implements ISorMessageBus<MSG> {
+class SorTopic<MSG> implements ISorMessageBus<MSG> {
 
     private final SorMessageType<MSG> type;
     private final ExecutorService threadPool;
@@ -24,12 +26,23 @@ public class SorTopic<MSG> implements ISorMessageBus<MSG> {
         listeners.add(listener);
     }
 
+    void unlisten(ISorMessageListener<MSG> listener) {
+        listeners.remove(listener);
+    }
+
     @Override
     public void write(MSG message) {
-        SorMessage<MSG> wrapped = new SorMessage<>(type, message);
+        write(new SorMessage<>(type, message));
+    }
+
+    void write(ISorMessage<MSG> message) {
         for (ISorMessageListener<MSG> listener : listeners) {
-            threadPool.submit(() -> listener.consume(wrapped));
+            threadPool.submit(() -> listener.consume(message));
         }
+    }
+
+    SorMessageType<MSG> getType() {
+        return type;
     }
 
 }

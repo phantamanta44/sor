@@ -2,7 +2,7 @@ package xyz.phanta.sor.core.launch;
 
 import com.moandjiezana.toml.Toml;
 import xyz.phanta.sor.api.ISorNode;
-import xyz.phanta.sor.core.SorUtils;
+import xyz.phanta.sor.core.util.SorUtils;
 import xyz.phanta.sor.core.log.SorLog;
 
 import java.util.Collection;

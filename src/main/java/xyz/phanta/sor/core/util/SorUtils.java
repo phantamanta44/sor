@@ -1,4 +1,4 @@
-package xyz.phanta.sor.core;
+package xyz.phanta.sor.core.util;
 
 import com.moandjiezana.toml.Toml;
 import xyz.phanta.sor.api.ISorNode;

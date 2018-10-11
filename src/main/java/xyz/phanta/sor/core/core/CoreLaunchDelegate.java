@@ -13,7 +13,6 @@ public class CoreLaunchDelegate extends NodeLaunchDelegate {
     private boolean offline = false;
     private String address = "";
     private int port = 7610;
-    private boolean ssl = true;
 
     public CoreLaunchDelegate(Toml mf, SorOptions args) throws SorInitializationException {
         super(mf);
@@ -24,7 +23,6 @@ public class CoreLaunchDelegate extends NodeLaunchDelegate {
             this.offline = config.getBoolean("offline", offline);
             this.address = config.getString("address", address);
             this.port = config.getLong("port", (long)port).intValue();
-            this.ssl = config.getBoolean("ssl", ssl);
         } else {
             SorLog.info("No mode-specific settings found.");
         }
@@ -40,7 +38,7 @@ public class CoreLaunchDelegate extends NodeLaunchDelegate {
             if (offline) {
                 SorLog.info("Offline mode; connection attempts will be ignored.");
             } else {
-                server.listen(address, port, ssl);
+                server.listen(address, port);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
