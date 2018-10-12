@@ -17,6 +17,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+// TODO node redundancy
+// TODO instrumentation api
 class SorServer {
 
     private final ExecutorService threadPool = Executors.newCachedThreadPool();

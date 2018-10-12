@@ -17,9 +17,9 @@ public class CoreLaunchDelegate extends NodeLaunchDelegate {
     public CoreLaunchDelegate(Toml mf, SorOptions args) throws SorInitializationException {
         super(mf);
         SorLog.info("Detected core mode.");
-        Toml config = mf.getTable("mode_conf");
+        Toml config = mf.getTable("core");
         if (config != null) {
-            SorLog.info("Parsing mode-specific settings...");
+            SorLog.info("Parsing core settings...");
             this.offline = config.getBoolean("offline", offline);
             this.address = config.getString("address", address);
             this.port = config.getLong("port", (long)port).intValue();

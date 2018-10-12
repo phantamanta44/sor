@@ -15,10 +15,6 @@ import java.io.File;
 public class SorMain {
 
     public static void main(String[] rawArgs) throws SorInitializationException {
-        // TODO core redundancy
-        // TODO node redundancy
-        // TODO instrumentation api
-
         // parse command line args
         SorOptions args = new SorOptions();
         try {
