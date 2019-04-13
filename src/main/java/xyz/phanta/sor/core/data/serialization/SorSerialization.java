@@ -9,6 +9,7 @@ import xyz.phanta.sor.core.log.SorLog;
 import xyz.phanta.sor.core.util.ByteUtils;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class SorSerialization {
@@ -166,9 +168,15 @@ public class SorSerialization {
 
         private static ISerializableField wrapField(Field field) {
             field.setAccessible(true);
+            return wrapField(new IFieldLike.Wrapper(field));
+        }
+
+        private static ISerializableField wrapField(IFieldLike field) {
             Class<?> type = field.getType();
             if (type == Byte.TYPE) {
                 return new SerializableByteField(field);
+            } else if (type == Character.TYPE) {
+                return new SerializableCharField(field);
             } else if (type == Short.TYPE) {
                 return new SerializableShortField(field);
             } else if (type == Integer.TYPE) {
@@ -183,10 +191,10 @@ public class SorSerialization {
                 return new SerializableBooleanField(field);
             } else if (type.isEnum()) {
                 return new SerializableEnumField(field);
-            } else if (type.isArray() || type == Character.TYPE) { // TODO array serialization
-                throw new UnsupportedOperationException("Cannot serialize type: " + type); // TODO char serialization
+            } else if (type.isArray()) {
+                return new SerializableArrayField(field, type.getComponentType());
             } else {
-                return new SerializableReferenceField(field);
+                return new SerializableReferenceField<>(field);
             }
         }
 
@@ -200,9 +208,9 @@ public class SorSerialization {
 
         private static class SerializableByteField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableByteField(Field field) {
+            SerializableByteField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -218,11 +226,31 @@ public class SorSerialization {
 
         }
 
+        private static class SerializableCharField implements ISerializableField {
+
+            private final IFieldLike field;
+
+            SerializableCharField(IFieldLike field) {
+                this.field = field;
+            }
+
+            @Override
+            public void serialize(Object obj, ByteUtils.Writer data) throws Exception {
+                data.writeByte((byte)field.getChar(obj));
+            }
+
+            @Override
+            public void deserialize(Object obj, ByteUtils.Reader data) throws Exception {
+                field.setChar(obj, (char)data.readByte());
+            }
+
+        }
+
         private static class SerializableShortField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableShortField(Field field) {
+            SerializableShortField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -240,9 +268,9 @@ public class SorSerialization {
 
         private static class SerializableIntField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableIntField(Field field) {
+            SerializableIntField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -260,9 +288,9 @@ public class SorSerialization {
 
         private static class SerializableLongField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableLongField(Field field) {
+            SerializableLongField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -280,9 +308,9 @@ public class SorSerialization {
 
         private static class SerializableFloatField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableFloatField(Field field) {
+            SerializableFloatField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -300,9 +328,9 @@ public class SorSerialization {
 
         private static class SerializableDoubleField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableDoubleField(Field field) {
+            SerializableDoubleField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -320,9 +348,9 @@ public class SorSerialization {
 
         private static class SerializableBooleanField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableBooleanField(Field field) {
+            SerializableBooleanField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -340,9 +368,9 @@ public class SorSerialization {
 
         private static class SerializableEnumField implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
 
-            SerializableEnumField(Field field) {
+            SerializableEnumField(IFieldLike field) {
                 this.field = field;
             }
 
@@ -358,13 +386,148 @@ public class SorSerialization {
 
         }
 
+        private static class SerializableArrayField implements ISerializableField, IFieldLike {
+
+            private final IFieldLike field;
+            private final Class<?> componentType;
+            private final ISerializableField subField;
+            private final ThreadLocal<AtomicInteger> pointer = new ThreadLocal<>();
+
+            SerializableArrayField(IFieldLike field, Class<?> componentType) {
+                this.field = field;
+                this.componentType = componentType;
+                this.subField = wrapField(this);
+            }
+
+            @Override
+            public void serialize(Object obj, ByteUtils.Writer data) throws Exception {
+                int length = Array.getLength(field.get(obj));
+                AtomicInteger threadPointer = getPointer();
+                threadPointer.set(-1);
+                while (threadPointer.incrementAndGet() < length) subField.serialize(obj, data);
+            }
+
+            @Override
+            public void deserialize(Object obj, ByteUtils.Reader data) throws Exception {
+                int length = Array.getLength(field.get(obj));
+                AtomicInteger threadPointer = getPointer();
+                threadPointer.set(-1);
+                while (threadPointer.incrementAndGet() < length) subField.deserialize(obj, data);
+            }
+
+            private AtomicInteger getPointer() {
+                AtomicInteger threadPointer = pointer.get();
+                if (threadPointer == null) {
+                    threadPointer = new AtomicInteger();
+                    pointer.set(threadPointer);
+                }
+                return threadPointer;
+            }
+
+            @Override
+            public Class<?> getType() {
+                return componentType;
+            }
+
+            @Override
+            public byte getByte(Object obj) {
+                return Array.getByte(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setByte(Object obj, byte value) {
+                Array.setByte(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public char getChar(Object obj) {
+                return Array.getChar(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setChar(Object obj, char value) {
+                Array.setChar(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public short getShort(Object obj) {
+                return Array.getShort(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setShort(Object obj, short value) {
+                Array.setShort(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public int getInt(Object obj) {
+                return Array.getInt(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setInt(Object obj, int value) {
+                Array.setInt(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public long getLong(Object obj) {
+                return Array.getLong(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setLong(Object obj, long value) {
+                Array.setLong(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public float getFloat(Object obj) {
+                return Array.getFloat(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setFloat(Object obj, float value) {
+                Array.setFloat(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public double getDouble(Object obj) {
+                return Array.getDouble(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setDouble(Object obj, double value) {
+                Array.setDouble(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public boolean getBoolean(Object obj) {
+                return Array.getBoolean(obj, pointer.get().get());
+            }
+
+            @Override
+            public void setBoolean(Object obj, boolean value) {
+                Array.setBoolean(obj, pointer.get().get(), value);
+            }
+
+            @Override
+            public Object get(Object obj) {
+                return Array.get(obj, pointer.get().get());
+            }
+
+            @Override
+            public void set(Object obj, Object value) {
+                Array.set(obj, pointer.get().get(), value);
+            }
+
+        }
+
         @SuppressWarnings("unchecked")
         private static class SerializableReferenceField<T> implements ISerializableField {
 
-            private final Field field;
+            private final IFieldLike field;
             private final ISerializer<T> serializer;
 
-            SerializableReferenceField(Field field) {
+            SerializableReferenceField(IFieldLike field) {
                 this.field = field;
                 this.serializer = (ISerializer<T>)serializerFor(field.getType());
             }
