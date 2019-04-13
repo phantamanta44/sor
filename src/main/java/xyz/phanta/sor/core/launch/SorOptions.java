@@ -22,7 +22,7 @@ public class SorOptions {
 
     @Nullable
     public LogLevel getLogLevel() {
-        return null;
+        return logLevel;
     }
 
 }

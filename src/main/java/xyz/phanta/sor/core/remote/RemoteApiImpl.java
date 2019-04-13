@@ -48,13 +48,11 @@ class RemoteApiImpl implements ISorApi {
         return connection;
     }
 
-    @SuppressWarnings("unchecked")
     <MSG> void post(String name, ISorMessage<MSG> msg) {
         RemoteTopic<MSG> topic = tryResolveTopic(name);
         if (topic != null) topic.write(msg);
     }
 
-    @SuppressWarnings("unchecked")
     <REQ, RES> void post(String name, ISorRequest<REQ, RES> request, ISorResponseCallback<RES> callback) {
         RemoteService<REQ, RES> service = tryResolveService(name);
         if (service != null) {

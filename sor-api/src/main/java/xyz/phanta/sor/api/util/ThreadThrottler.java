@@ -14,7 +14,7 @@ public class ThreadThrottler {
         return sum / SAMPLE_COUNT;
     }
 
-    private long[] samples = new long[SAMPLE_COUNT];
+    private final long[] samples = new long[SAMPLE_COUNT];
     private int sampleIndex = 0;
     private long lastSample = -1L;
 

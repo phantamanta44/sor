@@ -94,7 +94,7 @@ public class SorSerialization {
         });
     }
 
-    @SuppressWarnings({ "unchecked", "OptionalGetWithoutIsPresent" })
+    @SuppressWarnings({ "unchecked" })
     private static <T> ISerializer<T> serializerFor(Class<T> type) {
         ISerializer<T> serializer = (ISerializer<T>)serializers.get(type);
         return serializer != null ? serializer
@@ -378,12 +378,12 @@ public class SorSerialization {
         }
 
         @Override
-        public T deserialize(ByteUtils.Reader data) throws Exception {
+        public T deserialize(ByteUtils.Reader data) {
             return mappings.deserialize(data);
         }
 
         @Override
-        public void serialize(ByteUtils.Writer data, Object obj) throws Exception {
+        public void serialize(ByteUtils.Writer data, Object obj) {
             mappings.serialize(obj, data);
         }
 
