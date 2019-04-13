@@ -11,6 +11,12 @@ import xyz.phanta.sor.core.util.ByteUtils;
 import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.URL;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -24,12 +30,25 @@ public class SorSerialization {
         registerSerializer(String.class, ByteUtils.Writer::writeString, ByteUtils.Reader::readString);
         registerSerializer(Class.class,
                 (w, c) -> w.writeString(c.getCanonicalName()), r -> Class.forName(r.readString()));
+        registerSerializer(BigInteger.class,
+                (w, k) -> {
+                    byte[] bytes = k.toByteArray();
+                    w.writeVarPrecision(bytes.length).writeBytes(bytes);
+                }, r -> new BigInteger(r.readBytes(r.readVarPrecision())));
+        registerSerializer(BigDecimal.class,
+                (w, k) -> {
+                    byte[] bytes = k.toBigInteger().toByteArray();
+                    w.writeVarPrecision(bytes.length).writeBytes(bytes);
+                }, r -> new BigDecimal(new BigInteger(r.readBytes(r.readVarPrecision()))));
+        registerSerializer(URL.class, (w, u) -> w.writeString(u.toString()), r -> new URL(r.readString()));
+        registerSerializer(URI.class, (w, u) -> w.writeString(u.toString()), r -> URI.create(r.readString()));
+        registerSerializer(UUID.class, (w, u) -> w.writeString(u.toString()), r -> UUID.fromString(r.readString()));
+        registerSerializer(Date.class,
+                (w, d) -> w.writeString(d.toInstant().toString()), r -> Date.from(Instant.parse(r.readString())));
+        registerSerializer(Instant.class, (w, i) -> w.writeString(i.toString()), r -> Instant.parse(r.readString()));
+        registerSerializer(Duration.class, (w, d) -> w.writeString(d.toString()), r -> Duration.parse(r.readString()));
         // TODO serializers for various useful classes
         // - List, Set, Map
-        // - BigInteger, BigDecimal
-        // - URL, URI
-        // - UUID
-        // - Date, Instant, Duration
     }
 
     @SuppressWarnings("unchecked")
