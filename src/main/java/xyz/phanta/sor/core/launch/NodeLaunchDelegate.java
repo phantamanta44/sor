@@ -3,19 +3,17 @@ package xyz.phanta.sor.core.launch;
 import com.moandjiezana.toml.Toml;
 import xyz.phanta.sor.api.ISorNode;
 import xyz.phanta.sor.core.util.SorUtils;
-import xyz.phanta.sor.core.log.SorLog;
 
-import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 public abstract class NodeLaunchDelegate implements ILaunchDelegate {
 
-    protected final Collection<ISorNode> nodes;
+    protected final List<ISorNode> nodes;
 
     public NodeLaunchDelegate(Toml mf) throws SorInitializationException {
         try {
-            SorLog.info("Loading node jars...");
-            nodes = Collections.unmodifiableCollection(SorUtils.loadNodes(mf));
+            nodes = Collections.unmodifiableList(SorUtils.loadNodes(mf));
         } catch (SorInitializationException.Wrapped e) {
             throw e.unwrap();
         } catch (Exception e) {

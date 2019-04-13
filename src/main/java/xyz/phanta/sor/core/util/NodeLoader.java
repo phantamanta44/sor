@@ -16,16 +16,15 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-public class NodeLoader {
+class NodeLoader {
 
     @Nullable
     private static NodeLoader INSTANCE = null;
 
-    public static NodeLoader getInstance() throws SorInitializationException {
+    private static NodeLoader getInstance() throws SorInitializationException {
         return INSTANCE != null ? INSTANCE : (INSTANCE = new NodeLoader());
     }
 
@@ -41,13 +40,13 @@ public class NodeLoader {
         }
     }
 
-    public static Collection<Class<?>> loadFromManifest(Toml mf) throws SorInitializationException {
+    static List<Class<ISorNode>> loadFromManifest(Toml mf) throws SorInitializationException {
         NodeLoader loader = getInstance();
         loader.tryLoadFromManifest(mf);
         return loader.finish();
     }
 
-    public void tryLoad(Path path) throws SorInitializationException {
+    private void tryLoad(Path path) throws SorInitializationException {
         try {
             jars.add(path.getFileName().toString());
             mAddUrl.invoke(Thread.currentThread().getContextClassLoader(), path.toUri().toURL());
@@ -56,7 +55,7 @@ public class NodeLoader {
         }
     }
 
-    public void tryLoadFromManifest(Toml mf) throws SorInitializationException {
+    private void tryLoadFromManifest(Toml mf) throws SorInitializationException {
         try {
             FileSystem fs = FileSystems.getDefault();
             Toml nodes = mf.getTable("nodes");
@@ -86,12 +85,12 @@ public class NodeLoader {
         }
     }
 
-    public Collection<Class<?>> finish() throws SorInitializationException {
+    private List<Class<ISorNode>> finish() throws SorInitializationException {
         try (ScanResult scan = new ClassGraph()
                 .enableClassInfo()
                 .whitelistJars(jars.toArray(new String[0]))
                 .scan()) {
-            return scan.getClassesImplementing(ISorNode.class.getCanonicalName()).loadClasses();
+            return scan.getClassesImplementing(ISorNode.class.getCanonicalName()).loadClasses(ISorNode.class);
         } catch (Exception e) {
             throw new SorInitializationException(e);
         }
