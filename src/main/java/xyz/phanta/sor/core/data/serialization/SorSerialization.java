@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("unchecked")
 public class SorSerialization {
 
     private static final Map<Class<?>, SerializationMappings> serializationMappings = new ConcurrentHashMap<>();
@@ -32,6 +33,8 @@ public class SorSerialization {
         registerSerializer(String.class, ByteUtils.Writer::writeString, ByteUtils.Reader::readString);
         registerSerializer(Class.class,
                 (w, c) -> w.writeString(c.getCanonicalName()), r -> Class.forName(r.readString()));
+        registerSerializer(UUID.class, (w, u) -> w.writeString(u.toString()), r -> UUID.fromString(r.readString()));
+
         registerSerializer(BigInteger.class,
                 (w, k) -> {
                     byte[] bytes = k.toByteArray();
@@ -42,18 +45,89 @@ public class SorSerialization {
                     byte[] bytes = k.toBigInteger().toByteArray();
                     w.writeVarPrecision(bytes.length).writeBytes(bytes);
                 }, r -> new BigDecimal(new BigInteger(r.readBytes(r.readVarPrecision()))));
+
         registerSerializer(URL.class, (w, u) -> w.writeString(u.toString()), r -> new URL(r.readString()));
         registerSerializer(URI.class, (w, u) -> w.writeString(u.toString()), r -> URI.create(r.readString()));
-        registerSerializer(UUID.class, (w, u) -> w.writeString(u.toString()), r -> UUID.fromString(r.readString()));
+
         registerSerializer(Date.class,
                 (w, d) -> w.writeString(d.toInstant().toString()), r -> Date.from(Instant.parse(r.readString())));
         registerSerializer(Instant.class, (w, i) -> w.writeString(i.toString()), r -> Instant.parse(r.readString()));
         registerSerializer(Duration.class, (w, d) -> w.writeString(d.toString()), r -> Duration.parse(r.readString()));
-        // TODO serializers for various useful classes
-        // - List, Set, Map
+        
+        registerSerializer(List.class, (w, l) -> {
+            if (l.isEmpty()) {
+                w.writeVarPrecision(0);
+            } else {
+                w.writeVarPrecision(l.size());
+                Class<?> type = l.get(0).getClass();
+                w.writeString(type.getCanonicalName());
+                ISerializer serializer = serializerFor(type);
+                for (Object o : l) {
+                    serializer.serialize(w, o);
+                }
+            }
+        }, r -> {
+            int size = r.readVarPrecision();
+            if (size == 0) return Collections.EMPTY_LIST;
+            ISerializer serializer = serializerFor(Class.forName(r.readString()));
+            List list = new ArrayList();
+            while (size-- > 0) list.add(serializer.deserialize(r));
+            return list;
+        });
+        registerSerializer(Set.class, (w, s) -> {
+            if (s.isEmpty()) {
+                w.writeVarPrecision(0);
+            } else {
+                w.writeVarPrecision(s.size());
+                ISerializer serializer = null;
+                for (Object o : s) {
+                    if (serializer == null) {
+                        Class<?> type = o.getClass();
+                        w.writeString(type.getCanonicalName());
+                        serializer = serializerFor(type);
+                    }
+                    serializer.serialize(w, o);
+                }
+            }
+        }, r -> {
+            int size = r.readVarPrecision();
+            if (size == 0) return Collections.EMPTY_SET;
+            ISerializer serializer = serializerFor(Class.forName(r.readString()));
+            Set set = new HashSet();
+            while (size-- > 0) set.add(serializer.deserialize(r));
+            return set;
+        });
+        registerSerializer(Map.class, (w, m) -> {
+            if (m.isEmpty()) {
+                w.writeVarPrecision(0);
+            } else {
+                w.writeVarPrecision(m.size());
+                ISerializer keySerializer = null;
+                ISerializer valueSerializer = null;
+                for (Object entryRaw : m.entrySet()) {
+                    Map.Entry entry = (Map.Entry)entryRaw;
+                    if (keySerializer == null) {
+                        Class<?> keyType = entry.getKey().getClass();
+                        Class<?> valueType = entry.getValue().getClass();
+                        w.writeString(valueType.getCanonicalName());
+                        keySerializer = serializerFor(keyType);
+                        valueSerializer = serializerFor(valueType);
+                    }
+                    keySerializer.serialize(w, entry.getKey());
+                    valueSerializer.serialize(w, entry.getValue());
+                }
+            }
+        }, r -> {
+            int size = r.readVarPrecision();
+            if (size == 0) return Collections.EMPTY_MAP;
+            ISerializer keySerializer = serializerFor(Class.forName(r.readString()));
+            ISerializer valueSerializer = serializerFor(Class.forName(r.readString()));
+            Map map = new HashMap();
+            while (size-- > 0) map.put(keySerializer.deserialize(r), valueSerializer.deserialize(r));
+            return map;
+        });
     }
 
-    @SuppressWarnings("unchecked")
     private static <T> SerializationMappings<T> mappingsFor(Class<?> type) {
         return (SerializationMappings<T>)serializationMappings.computeIfAbsent(type, SerializationMappings::new);
     }
@@ -115,7 +189,6 @@ public class SorSerialization {
         });
     }
 
-    @SuppressWarnings({ "unchecked" })
     private static <T> ISerializer<T> serializerFor(Class<T> type) {
         ISerializer<T> serializer = (ISerializer<T>)serializers.get(type);
         return serializer != null ? serializer
@@ -521,7 +594,6 @@ public class SorSerialization {
 
         }
 
-        @SuppressWarnings("unchecked")
         private static class SerializableReferenceField<T> implements ISerializableField {
 
             private final IFieldLike field;
